@@ -1,0 +1,133 @@
+\UseRawInputEncoding
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+
+% \usepackage[deutsch]{babel}
+\usepackage[ngerman]{babel}
+
+%\usepackage[ansinew]{inputenc}
+\usepackage[utf8]{inputenc}
+
+% nice code input for appendix
+\usepackage{tcolorbox}
+\tcbuselibrary{minted,breakable,xparse,skins}
+
+% Replace `letterpaper' with `a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=2cm,marginparwidth=1.75cm]{geometry}
+\usepackage[utf8]{inputenc}
+% Useful packages
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage[colorlinks=true, allcolors=black]{hyperref}
+% for pictures ... reason: https://tex.stackexchange.com/questions/8625/force-figure-placement-in-text
+\usepackage{float}
+
+% highlighted code in text
+\usepackage{soul}
+\definecolor{Light}{gray}{.90}
+\sethlcolor{Light}
+\let\OldTexttt\texttt
+\renewcommand{\texttt}[1]{\OldTexttt{\hl{#1}}}
+
+% einrücken abschalten
+\setlength{\parindent}{0pt}
+
+\begin{document}
+
+\begin{titlepage}
+		\begin{center}
+			\vspace*{1cm}
+			
+			\Huge
+			\textbf{Spark \\Type-Token-Ratio}
+			
+			\vspace{2cm}
+			
+			\Large
+                Programmierkonzepte und Algorithmen WS25/26\\
+				Justin Gebert, Ole Lordieck\\
+   
+			\vfill
+			
+			\vspace{0.8cm}
+			
+			\includegraphics[width=0.3\textwidth]{htw_logo.jpg} 
+			
+			\vspace{1cm}
+			
+			Hochschule für Technik und Wirtschaft Berlin\\
+			Fachbereich 4\\
+			Informatik, Kommunikation und Wirtschaft
+			
+			
+		\end{center}
+	\end{titlepage}
+
+\newpage
+
+\tableofcontents
+\thispagestyle{empty}  % no page number
+
+\newpage
+
+%------------------------------------------------------------------------------
+% START CONTENT
+%
+%\setcounter{page}{1}  % start counting pages after table of contents
+
+\section{Aufgabenstellung}
+
+\section{Lösungsbeschreibung}
+
+\section{Beschreibung des Codes}
+
+\section{Screenshots der Ergebnisse}
+
+\section{Tests}
+
+\section{Leistung und Laufzeiten}
+
+\section{Fazit} 
+
+\newpage
+
+
+
+%------------------------------------------------------------------------------
+% BIBLIOGRAPHY AND FIGURE LIST
+%
+%\bibliographystyle{ieeetr}
+%\bibliography{sample}
+%\listoffigures
+%------------------------------------------------------------------------------
+
+\clearpage
+\appendix
+
+%------------------------------------------------------------------------------
+% EIDESSTATTLICHE ERKLÄRUNG
+%
+%\newpage
+%
+%\section*{Eidesstattliche Erklärung}
+% Hiermit erkläre ich, dass ich die vorliegende Arbeit selbstständig und eigenhändig sowie ohne unerlaubte fremde Hilfe und ausschließlich %unter Verwendung der aufgeführten Quellen und Hilfsmittel angefertigt habe.\\
+% 
+% \noindent Die selbständige und eigenständige Anfertigung versichert an Eides statt:
+%
+% \vspace{3cm}
+% % Text über den Linien
+% \noindent\hspace{1,05cm} Berlin, 11. Juli 2023\hfill\includegraphics[width=115pt]{signature.jpg} \hspace{1cm}
+% \vspace{-0,3cm} % Anpassen der Höhe des Ort, Datum und Unterschrift
+% 
+% % Linien
+% \noindent\hspace{1cm} \rule{3.25cm}{0.5pt} \hfill \rule{4cm}{0.5pt} \hspace{1cm}
+% \vspace{-0,1cm} % Anpassen der Höhe des Textes unter den Linien
+% 
+% % Text unter den Linien
+% \noindent\hspace{1,85cm} Ort, Datum \hfill Unterschrift \hspace{2cm}
+%
+%------------------------------------------------------------------------------
+
+\end{document}
