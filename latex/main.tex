@@ -79,6 +79,14 @@
 
 \section{Aufgabenstellung}
 
+Die Aufgabe besteht darin, einen gegebenen Textkorpus mithilfe von Apache Spark verteilt zu verarbeiten, um die sprachliche Vielfalt der enthaltenen Texte zu untersuchen. Dazu sollen die Texte zunächst als normale Textdateien eingelesen. Anschließend soll mit Spark die Type-Token-Ratio (TTR) für jede im Datensatz vorkommende Sprache berechnet werden. Die TTR wird mit der Anzahl der einzigartigen Wörter durch die Gesamtzahl aller Wörter berechnet. 
+\[
+\text{TTR} = \frac{\text{Anzahl aller Wörter}}{\text{Anzahl einzigartiger Wörter}}
+\]
+Außerdem sollen vor der Analyse alle Stoppwörter entfernt werden, um aussagekräftigere Ergebnisse zu erhalten. Ziel ist es, die sprachliche Vielfalt zwischen den Sprachen zu vergleichen und gleichzeitig die Vorteile verteilter Big-Data-Verarbeitung sichtbar zu machen, indem der Datensatz bei Bedarf künstlich vergrößert wird.
+
+
+
 \section{Lösungsbeschreibung}
 
 \section{Beschreibung des Codes}
