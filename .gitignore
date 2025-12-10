@@ -4,6 +4,9 @@
 # IntelliJ IDEA Projektdateien
 .idea/
 
+# Maven build output
+target/
+
 # Log file
 *.log
 
@@ -28,5 +31,5 @@ replay_pid*
 
 # dont upload compiled latex files
 latex/*
-!latex/htw_logo.jpg
-!latex/main.tex
+!latex/images
+!latex/doku.tex
