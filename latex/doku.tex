@@ -81,23 +81,200 @@
 
 Die Aufgabe besteht darin, einen gegebenen Textkorpus mithilfe von Apache Spark verteilt zu verarbeiten, um die sprachliche Vielfalt der enthaltenen Texte zu untersuchen. Dazu sollen die Texte zunächst als normale Textdateien eingelesen. Anschließend soll mit Spark die Type-Token-Ratio (TTR) für jede im Datensatz vorkommende Sprache berechnet werden. Die TTR wird mit der Anzahl der einzigartigen Wörter durch die Gesamtzahl aller Wörter berechnet. 
 \[
-\text{TTR} = \frac{\text{Anzahl aller Wörter}}{\text{Anzahl einzigartiger Wörter}}
+\text{TTR} = \frac{\text{Anzahl einzigartiger Wörter}}{\text{Anzahl aller Wörter}}
 \]
 Außerdem sollen vor der Analyse alle Stoppwörter entfernt werden, um aussagekräftigere Ergebnisse zu erhalten. Ziel ist es, die sprachliche Vielfalt zwischen den Sprachen zu vergleichen und gleichzeitig die Vorteile verteilter Big-Data-Verarbeitung sichtbar zu machen, indem der Datensatz bei Bedarf künstlich vergrößert wird.
 
-
-
 \section{Lösungsbeschreibung}
+
+
+\subsection{Datenannahmen und Einlesen}
+\begin{itemize}
+    \item Eingang: Textdateien in einem Verzeichnis (empfohlen: \texttt{data/raw/<lang>/*.txt})
+    \item Sprache wird aus dem Dateipfad mit einer Regex extrahiert (Standard: Elternordner = Sprachcode)
+    \item Einlesen mit \texttt{wholeTextFiles}: liefert Paare \texttt{(Pfad, Inhalt)} und erlaubt dadurch robuste Sprachzuordnung
+\end{itemize}
+
+\subsection{Preprocessing}
+\begin{itemize}
+    \item Unicode-Tokenisierung: Extraktion von Wortfolgen (\texttt{\textbackslash p\{L\}+}), damit auch nicht-lateinische Sprachen unterstützt werden
+    \item Normalisierung und Kleinschreibung zur Reduktion von Duplikaten (z.B. verschiedene Unicode-Formen)
+    \item Filter:
+    \begin{itemize}
+        \item minimale Token-Länge (\texttt{minLen})
+        \item Stoppwort-Filter
+    \end{itemize}
+\end{itemize}
+
+\subsection{Verteilte Berechnung in Spark}
+\begin{itemize}
+    \item Erzeugung eines RDD mit Paaren \texttt{(language, word)}
+    \item \textbf{Gesamtzahl Tokens}: \texttt{mapToPair((lang,1))} + \texttt{reduceByKey(sum)}
+    \item \textbf{Einzigartige Tokens}: zwei Modi
+    \begin{itemize}
+        \item \textbf{Exakt}: \texttt{distinct()} auf \texttt{(lang,word)} + \texttt{reduceByKey}
+        \item \textbf{Approx. (optional)}: \texttt{countApproxDistinctByKey(relativeSD)} (schneller auf großen Datenmengen)
+    \end{itemize}
+    \item Join der beiden Ergebnisse pro Sprache und Berechnung von \texttt{ttr = unique/total}
+\end{itemize}
+
+\subsection{Speicherung der Ergebnisse}
+\begin{itemize}
+    \item Ausgabe als \textbf{CSV} (mit Header, auf 1 Datei zusammengeführt via \texttt{coalesce(1)})
+    \item Zusätzlich Ausgabe als \textbf{Parquet} zur effizienten Weiterverarbeitung
+\end{itemize}
+
 
 \section{Beschreibung des Codes}
 
+Der Code befindet sich in der Klasse \texttt{TTRJob.java}. Im Folgenden werden die wichtigsten Code-Fragmente erläutert.
+
+\subsection{Einlesen der Dateien}
+Die Textdateien werden mit \texttt{wholeTextFiles} eingelesen, um den Pfad für die Sprachextraktion zu erhalten:
+\begin{verbatim}
+JavaPairRDD<String, String> filesRDD = spark.sparkContext()
+    .wholeTextFiles(textDir + "/*/*.txt", 8)
+    .toJavaRDD()
+    .mapToPair(t -> new Tuple2<>(t._1(), t._2()));
+\end{verbatim}
+
+\subsection{Tokenisierung und Stoppwort-Filter}
+Für die Tokenisierung wird ein Unicode-Pattern verwendet (\texttt{\textbackslash p\{L\}+}), das alle Unicode-Buchstaben erkennt. Die Stoppwörter werden per Broadcast verteilt:
+\begin{verbatim}
+// Broadcast stopwords to all workers
+Broadcast<Map<String, Set<String>>> broadcastStopwords = 
+    spark.sparkContext().broadcast(stopwordsMap, ...);
+
+// Token extraction with filtering
+Matcher matcher = WORD_PATTERN.matcher(content);
+while (matcher.find()) {
+    String word = normalizeWord(matcher.group());
+    if (word.length() >= MIN_WORD_LENGTH 
+        && !stopwords.contains(word)) {
+        pairs.add(new Tuple2<>(language, word));
+    }
+}
+\end{verbatim}
+
+\subsection{TTR-Berechnung}
+Die verteilte Berechnung erfolgt in zwei Schritten mit anschließendem Join:
+\begin{verbatim}
+// Total tokens per language
+JavaPairRDD<String, Long> totalTokensPerLang = langWordPairs
+    .mapToPair(t -> new Tuple2<>(t._1(), 1L))
+    .reduceByKey(Long::sum);
+
+// Unique tokens per language
+JavaPairRDD<String, Long> uniqueTokensPerLang = langWordPairs
+    .distinct()
+    .mapToPair(t -> new Tuple2<>(t._1(), 1L))
+    .reduceByKey(Long::sum);
+
+// Join and calculate TTR
+JavaPairRDD<String, Tuple2<Long, Long>> joinedCounts = 
+    totalTokensPerLang.join(uniqueTokensPerLang);
+double ttr = (double) unique / total;
+\end{verbatim}
+
 \section{Screenshots der Ergebnisse}
+
+Die folgende Tabelle zeigt die Ergebnisse der TTR-Berechnung für alle acht Sprachen im Datensatz (134 MB, 363 Dateien):
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|l|r|r|r|}
+\hline
+\textbf{Sprache} & \textbf{Total Tokens} & \textbf{Unique Tokens} & \textbf{TTR} \\
+\hline
+dutch     &  60.739    &  12.222   & 0,2012 \\
+english   & 1.984.198  &  69.223   & 0,0349 \\
+french    & 2.305.570  &  78.002   & 0,0338 \\
+german    & 2.174.079  & 157.107   & 0,0723 \\
+italian   & 1.454.801  &  98.773   & 0,0679 \\
+russian   &   201.710  &  59.296   & 0,2940 \\
+spanish   &   622.341  &  66.591   & 0,1070 \\
+ukrainian &   473.116  &  94.795   & 0,2004 \\
+\hline
+\end{tabular}
+\caption{TTR-Ergebnisse pro Sprache}
+\end{table}
+
+\textbf{Interpretation:} Russisch zeigt die höchste sprachliche Vielfalt (TTR = 0,29), was auf die reiche Morphologie zurückzuführen ist. Französisch und Englisch haben niedrigere TTR-Werte (ca. 0,03), was bei großen Textmengen typisch ist, da häufige Wörter wiederholt werden.
 
 \section{Tests}
 
+Zur Validierung der Ergebnisse wurden folgende Tests durchgeführt:
+
+\subsection{Funktionale Tests}
+\begin{itemize}
+    \item \textbf{Stoppwort-Filter}: Für jede Sprache wurden die entsprechenden Stoppwort-Listen geladen (275--619 Wörter pro Sprache). Die Filter wurden korrekt angewandt.
+    \item \textbf{Unicode-Unterstützung}: Russische und Ukrainische Texte mit kyrillischen Zeichen wurden korrekt tokenisiert.
+    \item \textbf{Sprachextraktion}: Die Sprache wurde aus dem Dateipfad (\texttt{data/text/<sprache>/}) korrekt extrahiert.
+\end{itemize}
+
+\subsection{Ergebnis-Validierung}
+\begin{itemize}
+    \item Alle 8 Sprachen wurden erkannt und verarbeitet (363 Dateien)
+    \item TTR-Werte liegen im erwarteten Bereich (0,03 -- 0,30)
+    \item CSV-Ausgabe wurde erfolgreich generiert
+\end{itemize}
+
 \section{Leistung und Laufzeiten}
 
-\section{Fazit} 
+\subsection{Messaufbau}
+\begin{itemize}
+    \item \textbf{Hardware}: MacBook mit Apple Silicon, Spark Local Mode
+    \item \textbf{Datensatz}: Original (134 MB, 363 Dateien) und vergrößert (672 MB, 1815 Dateien)
+    \item \textbf{Parallelisierung}: Tests mit 1, 2, 4 und 8 Kernen
+\end{itemize}
+
+\subsection{Ergebnisse}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{|c|c|c|}
+\hline
+\textbf{Kerne} & \textbf{Laufzeit (s)} & \textbf{Speedup} \\
+\hline
+1 & 61,43 & 1,0x \\
+2 & 37,36 & 1,6x \\
+4 & 23,07 & 2,7x \\
+8 & 19,11 & 3,2x \\
+\hline
+\end{tabular}
+\caption{Laufzeiten auf dem 672 MB Datensatz}
+\end{table}
+
+\textbf{Analyse}: Die Skalierung zeigt deutliche Vorteile der Parallelisierung. Der Speedup ist nicht linear, da:
+\begin{itemize}
+    \item Shuffle-Operationen (z.B. \texttt{distinct()}, \texttt{reduceByKey}) Synchronisation erfordern
+    \item Der Local Mode alle Kerne auf einem Rechner nutzt (shared memory)
+    \item Overhead durch Spark-Koordination bei kleinen Datensätzen
+\end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\linewidth]{images/benchmark.png}
+    \caption{Laufzeit und Speedup in Abhängigkeit der CPU-Kerne}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/ttr_comparison.png}
+    \caption{Vergleich der sprachlichen Vielfalt (TTR) pro Sprache}
+\end{figure}
+
+
+\section{Fazit}
+
+\begin{itemize}
+    \item Die Type-Token-Ratio konnte erfolgreich für acht Sprachen mit Apache Spark berechnet werden.
+    \item \textbf{Höchste sprachliche Vielfalt}: Russisch (TTR = 0,29).
+    \item \textbf{Niedrigste Vielfalt}: Französisch und Englisch (TTR = 0,03).
+    \item Die Parallelisierung zeigt mit 8 Kernen einen Speedup von 3,2x gegenüber sequentieller Verarbeitung.
+    \item Der Broadcast der Stoppwörter und das Caching der RDDs optimieren die Performance.
+    \item Der \texttt{distinct()}-Operator ist die rechenintensivste Operation (Shuffle).
+\end{itemize}
 
 \newpage
 
