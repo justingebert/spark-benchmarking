@@ -1,25 +1,43 @@
-# ProgAlg Task 12: Type-Token-Ratio 
+# Spark Type-Token-Ratio
 
-Alles was wir zum Bearbeiten der Aufgabe brauchen hab ich hier in das Repo gepackt. Die Texte hab ich erstmal so 
-gelassen wie er sie in DropBox hochgeladen hat. Ich habe nur die Leerzeichen und Kommas aus den Dateinamen entfernt. Ob 
-und wie wir die dann noch duplizieren um die Arbeitslast zu erhöhen schauen wir später (das ist in der Aufgabenstellung 
-empfohlen, nicht explizit gefordert).
+This project calculates the **Type-Token-Ratio (TTR)** for a multilingual text corpus using Apache Spark.
+It measures linguistic diversity by comparing the number of unique words (Types) to the total number of words (Tokens).
 
+## Implementation Details
 
-## Repo Struktur
+- **Spark Job**: `TTRJob.java`
+- **Features**:
+  - `wholeTextFiles`: Reads files while preserving directory paths for language detection
+  - **Broadcast Variables**: Efficiently distributes stopword lists to all workers
+  - **Unicode Tokenization**: Supports Cyrillic (Russian/Ukrainian) and other scripts
+  - **Type-Token Ratio**: Calculates `unique / total` for each language
 
-**data/stopwords** - Stopword .json Dateien für alle Sprachen<br>
-**data/text/<sprache>** - alle bereitgestellten Texte aus Dropbox<br>
-**latex/** - Dokumentation im doku.tex File und Bilder für die Doku (der Rest ist kompiliert uns soll lokal bleiben)<br> 
-**src/main/java** - Standard Ordner für Java Source Code (Hier sucht Maven nach dem Code für die jars)<br>
+## Repo Structure
 
-## How To Use
+- **data/stopwords/**: JSON stopword lists for 8 languages
+- **data/text/<language>/**: Input text corpus organized by language
+- **src/main/java/TTRJob.java**: Main Spark application
+- **latex/**: Project documentation (`doku.tex`)
+- **results/**: output CSV files
 
-Jar erzeugen:<br>
-Run `$ mvn package` im Reposiroty Root Folder.
+## How To Build & Run
 
-Programm Ausführen:<br>
-Run `$ YOUR_SPARK_HOME/bin/spark-submit --class "WordCount" --master "local[4]" path/to/target/prog-alg-1.0.jar path/to/textfile`<br>
-Die WordCount Klasse ist erstmal nur zum ausprobieren ob/wie das funktioniert. Wir können jetzt eine eigene Javaklasse 
-für die Aufgabe schreiben. Die ist dann nach dem erzeugen der Jar in der selben Jar wie WordCount und muss dann zum  
-Ausführen mit dem --class Parameter statt "WordCount" angegeben werden.
+### 1. Build JAR
+```bash
+mvn clean package
+```
+
+### 2. Run Spark Job
+Submit the job to Spark (local mode):
+```bash
+spark-submit \
+  --class TTRJob \
+  --master "local[4]" \
+  target/prog-alg-1.0.jar \
+  data/text \
+  data/stopwords \
+  results
+```
+
+### 3. Output
+Results will be printed to the console and saved to `results/ttr_results.csv`.
