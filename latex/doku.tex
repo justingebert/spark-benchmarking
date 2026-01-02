@@ -120,9 +120,15 @@ Außerdem sollen vor der Analyse alle Stoppwörter entfernt werden, um aussagekr
 
 \subsection{Speicherung der Ergebnisse}
 \begin{itemize}
-    \item Ausgabe als \textbf{CSV} (mit Header, auf 1 Datei zusammengeführt via \texttt{coalesce(1)})
-    \item Zusätzlich Ausgabe als \textbf{Parquet} zur effizienten Weiterverarbeitung
+    \item Ausgabe als \textbf{CSV} (mit Header, Ergebnisse sortiert nach Sprache)
+    \item Ausgabe auf Konsole zur schnellen Überprüfung
 \end{itemize}
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\linewidth]{images/spark_flow_diagram.png}
+    \caption{Datenfluss-Diagramm (DAG) des Spark Jobs}
+\end{figure}
 
 
 \section{Beschreibung des Codes}
@@ -132,10 +138,7 @@ Der Code befindet sich in der Klasse \texttt{TTRJob.java}. Im Folgenden werden d
 \subsection{Einlesen der Dateien}
 Die Textdateien werden mit \texttt{wholeTextFiles} eingelesen, um den Pfad für die Sprachextraktion zu erhalten:
 \begin{verbatim}
-JavaPairRDD<String, String> filesRDD = spark.sparkContext()
-    .wholeTextFiles(textDir + "/*/*.txt", 8)
-    .toJavaRDD()
-    .mapToPair(t -> new Tuple2<>(t._1(), t._2()));
+JavaPairRDD<String, String> filesRDD = sc.wholeTextFiles(textDir + "/*/*.txt", 8);
 \end{verbatim}
 
 \subsection{Tokenisierung und Stoppwort-Filter}
@@ -143,14 +146,13 @@ Für die Tokenisierung wird ein Unicode-Pattern verwendet (\texttt{\textbackslas
 \begin{verbatim}
 // Broadcast stopwords to all workers
 Broadcast<Map<String, Set<String>>> broadcastStopwords = 
-    spark.sparkContext().broadcast(stopwordsMap, ...);
+    sc.broadcast(stopwordsMap);
 
 // Token extraction with filtering
 Matcher matcher = WORD_PATTERN.matcher(content);
 while (matcher.find()) {
     String word = normalizeWord(matcher.group());
-    if (word.length() >= MIN_WORD_LENGTH 
-        && !stopwords.contains(word)) {
+    if (!stopwords.contains(word)) {
         pairs.add(new Tuple2<>(language, word));
     }
 }
@@ -236,20 +238,20 @@ Zur Validierung der Ergebnisse wurden folgende Tests durchgeführt:
 \hline
 \textbf{Kerne} & \textbf{Laufzeit (s)} & \textbf{Speedup} \\
 \hline
-1 & 61,43 & 1,0x \\
-2 & 37,36 & 1,6x \\
-4 & 23,07 & 2,7x \\
-8 & 19,11 & 3,2x \\
+1 & 54,83 & 1,0x \\
+2 & 28,84 & 1,9x \\
+4 & 18,02 & 3,0x \\
+8 & 13,52 & 4,1x \\
 \hline
 \end{tabular}
 \caption{Laufzeiten auf dem 672 MB Datensatz}
 \end{table}
 
-\textbf{Analyse}: Die Skalierung zeigt deutliche Vorteile der Parallelisierung. Der Speedup ist nicht linear, da:
+\textbf{Analyse}: Die Skalierung zeigt deutliche Vorteile der Parallelisierung. Durch die Optimierung auf Spark Core (ohne SQL-Overhead) konnte der Speedup von 3,2x auf 4,1x gesteigert werden. Die Laufzeit auf 8 Kernen sank von ca. 19s auf 13,5s. Der Speedup ist nicht perfekt linear, da:
 \begin{itemize}
     \item Shuffle-Operationen (z.B. \texttt{distinct()}, \texttt{reduceByKey}) Synchronisation erfordern
-    \item Der Local Mode alle Kerne auf einem Rechner nutzt (shared memory)
-    \item Overhead durch Spark-Koordination bei kleinen Datensätzen
+    \item Der Local Mode alle Kerne auf einem Rechner nutzt (shared memory limit)
+    \item Overhead durch Spark-Koordination
 \end{itemize}
 
 \begin{figure}[H]
