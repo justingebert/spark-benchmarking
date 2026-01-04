@@ -100,27 +100,23 @@ spark-submit --class TTRJob --master "local[4]" \
 \end{verbatim}
 
 \textbf{Automatisierte Benchmarks:}
-Für die Leistungsmessung wurde ein Python-Script (\texttt{scripts/run\_benchmarks.py}) entwickelt, das den Job automatisch mit 1, 2, 4 und 8 Kernen ausführt und die Laufzeiten protokolliert.
+Für die Leistungsmessung gibt es ein Python-Script (\texttt{scripts/run\_benchmarks.py}), das den Job mit 1, 2, 4 und 8 Kernen ausführt und die Laufzeiten protokolliert.
 
 \section{Lösungsbeschreibung}
 
 
 \subsection{Datenannahmen und Einlesen}
 \begin{itemize}
-    \item Eingang: Textdateien in einem Verzeichnis (empfohlen: \texttt{data/raw/<lang>/*.txt})
-    \item Sprache wird aus dem Dateipfad mit einer Regex extrahiert (Standard: Elternordner = Sprachcode)
-    \item Einlesen mit \texttt{wholeTextFiles}: liefert Paare \texttt{(Pfad, Inhalt)} und erlaubt dadurch robuste Sprachzuordnung
+    \item Eingang: Textdateien im Verzeichnis \texttt{data/text}
+    \item Sprache wird aus dem Dateipfad mit einer Regex extrahiert (Parent-Ordner = Sprachcode)
+    \item Einlesen mit \texttt{wholeTextFiles}: liefert Paare \texttt{(Pfad, Inhalt)} für Text und Sprachzuordnung
 \end{itemize}
 
 \subsection{Preprocessing}
 \begin{itemize}
     \item Unicode-Tokenisierung: Extraktion von Wortfolgen (\texttt{\textbackslash p\{L\}+}), damit auch nicht-lateinische Sprachen unterstützt werden
-    \item Normalisierung und Kleinschreibung zur Reduktion von Duplikaten (z.B. verschiedene Unicode-Formen)
-    \item Filter:
-    \begin{itemize}
-        \item minimale Token-Länge (\texttt{minLen})
-        \item Stoppwort-Filter
-    \end{itemize}
+    \item Normalisierung und Kleinschreibung zur Reduktion von Duplikaten
+    \item Stoppwort-Filter
 \end{itemize}
 
 \subsection{Verteilte Berechnung in Spark}
@@ -137,8 +133,9 @@ Für die Leistungsmessung wurde ein Python-Script (\texttt{scripts/run\_benchmar
 
 \subsection{Speicherung der Ergebnisse}
 \begin{itemize}
-    \item Ausgabe als \textbf{CSV} (mit Header, Ergebnisse sortiert nach Sprache)
+    \item Ausgabe als \textbf{CSV}
     \item Ausgabe auf Konsole zur schnellen Überprüfung
+    \item Zeit messungen in der Konsole
 \end{itemize}
 
 \begin{figure}[H]
@@ -161,11 +158,9 @@ JavaPairRDD<String, String> filesRDD = sc.wholeTextFiles(textDir + "/*/*.txt", 8
 \subsection{Tokenisierung und Stoppwort-Filter}
 Für die Tokenisierung wird ein Unicode-Pattern verwendet (\texttt{\textbackslash p\{L\}+}), das alle Unicode-Buchstaben erkennt. Die Stoppwörter werden per Broadcast verteilt:
 \begin{verbatim}
-// Broadcast stopwords to all workers
 Broadcast<Map<String, Set<String>>> broadcastStopwords = 
     sc.broadcast(stopwordsMap);
 
-// Token extraction with filtering
 Matcher matcher = WORD_PATTERN.matcher(content);
 while (matcher.find()) {
     String word = normalizeWord(matcher.group());
@@ -218,7 +213,7 @@ ukrainian &   473.116  &  94.795   & 0,2004 \\
 \caption{TTR-Ergebnisse pro Sprache}
 \end{table}
 
-\textbf{Interpretation:} Russisch zeigt die höchste sprachliche Vielfalt (TTR = 0,29), was auf die reiche Morphologie zurückzuführen ist. Französisch und Englisch haben niedrigere TTR-Werte (ca. 0,03), was bei großen Textmengen typisch ist, da häufige Wörter wiederholt werden.
+\textbf{Interpretation:} Russisch zeigt die höchste sprachliche Vielfalt (TTR = 0,29). Französisch und Englisch haben niedrigere TTR-Werte (ca. 0,03).
 
 \section{Tests}
 
@@ -226,15 +221,15 @@ Zur Validierung der Ergebnisse wurden folgende Tests durchgeführt:
 
 \subsection{Funktionale Tests}
 \begin{itemize}
-    \item \textbf{Stoppwort-Filter}: Für jede Sprache wurden die entsprechenden Stoppwort-Listen geladen (275--619 Wörter pro Sprache). Die Filter wurden korrekt angewandt.
+    \item \textbf{Stoppwort-Filter}: Für jede Sprache wurden die entsprechenden Stoppwort-Listen geladen. Der Filter wurde korrekt angewandt.
     \item \textbf{Unicode-Unterstützung}: Russische und Ukrainische Texte mit kyrillischen Zeichen wurden korrekt tokenisiert.
     \item \textbf{Sprachextraktion}: Die Sprache wurde aus dem Dateipfad (\texttt{data/text/<sprache>/}) korrekt extrahiert.
 \end{itemize}
 
 \subsection{Ergebnis-Validierung}
 \begin{itemize}
-    \item Alle 8 Sprachen wurden erkannt und verarbeitet (363 Dateien)
-    \item TTR-Werte liegen im erwarteten Bereich (0,03 -- 0,30)
+    \item Alle 8 Sprachen wurden erkannt und verarbeitet
+    \item TTR-Werte liegen im erwarteten Bereich <1,0
     \item CSV-Ausgabe wurde erfolgreich generiert
 \end{itemize}
 
@@ -264,7 +259,7 @@ Zur Validierung der Ergebnisse wurden folgende Tests durchgeführt:
 \caption{Laufzeiten auf dem 672 MB Datensatz}
 \end{table}
 
-\textbf{Analyse}: Die Skalierung zeigt deutliche Vorteile der Parallelisierung. Durch die Optimierung auf Spark Core (ohne SQL-Overhead) konnte der Speedup von 3,2x auf 4,7x gesteigert werden. Die Laufzeit auf 8 Kernen sank auf ca. 12,3s. Der Speedup ist nicht perfekt linear, da:
+\textbf{Analyse}: Die Skalierung zeigt deutliche Vorteile der Parallelisierung. Die Laufzeit auf 8 Kernen sank auf ca. 12,3s. Der Speedup ist nicht perfekt linear, da:
 \begin{itemize}
     \item Shuffle-Operationen (z.B. \texttt{distinct()}, \texttt{reduceByKey}) Synchronisation erfordern
     \item Der Local Mode alle Kerne auf einem Rechner nutzt (shared memory limit)
@@ -290,7 +285,7 @@ Zur Validierung der Ergebnisse wurden folgende Tests durchgeführt:
     \item Die Type-Token-Ratio konnte erfolgreich für acht Sprachen mit Apache Spark berechnet werden.
     \item \textbf{Höchste sprachliche Vielfalt}: Russisch (TTR = 0,29).
     \item \textbf{Niedrigste Vielfalt}: Französisch und Englisch (TTR = 0,03).
-    \item Die Parallelisierung zeigt mit 8 Kernen einen Speedup von 3,2x gegenüber sequentieller Verarbeitung.
+    \item Die Parallelisierung zeigt mit 8 Kernen einen Speedup von 4,7x gegenüber sequentieller Verarbeitung.
     \item Der Broadcast der Stoppwörter und das Caching der RDDs optimieren die Performance.
     \item Der \texttt{distinct()}-Operator ist die rechenintensivste Operation (Shuffle).
 \end{itemize}
