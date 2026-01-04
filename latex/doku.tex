@@ -85,6 +85,23 @@ Die Aufgabe besteht darin, einen gegebenen Textkorpus mithilfe von Apache Spark 
 \]
 Außerdem sollen vor der Analyse alle Stoppwörter entfernt werden, um aussagekräftigere Ergebnisse zu erhalten. Ziel ist es, die sprachliche Vielfalt zwischen den Sprachen zu vergleichen und gleichzeitig die Vorteile verteilter Big-Data-Verarbeitung sichtbar zu machen, indem der Datensatz bei Bedarf künstlich vergrößert wird.
 
+\subsection{Ausführung des Spark Jobs}
+Der Job muss zunächst gebaut werden:
+\begin{verbatim}
+mvn clean package
+\end{verbatim}
+
+Anschließend wird er mit \texttt{spark-submit} gestartet. Die Anzahl der Kerne kann dabei flexibel über den Master-Parameter konfiguriert werden.
+
+\textbf{Befehl für 4 Kerne:}
+\begin{verbatim}
+spark-submit --class TTRJob --master "local[4]" \
+    target/prog-alg-1.0.jar data/text data/stopwords results
+\end{verbatim}
+
+\textbf{Automatisierte Benchmarks:}
+Für die Leistungsmessung wurde ein Python-Script (\texttt{scripts/run\_benchmarks.py}) entwickelt, das den Job automatisch mit 1, 2, 4 und 8 Kernen ausführt und die Laufzeiten protokolliert.
+
 \section{Lösungsbeschreibung}
 
 
@@ -238,16 +255,16 @@ Zur Validierung der Ergebnisse wurden folgende Tests durchgeführt:
 \hline
 \textbf{Kerne} & \textbf{Laufzeit (s)} & \textbf{Speedup} \\
 \hline
-1 & 54,83 & 1,0x \\
-2 & 28,84 & 1,9x \\
-4 & 18,02 & 3,0x \\
-8 & 13,52 & 4,1x \\
+1 & 57,30 & 1,0x \\
+2 & 28,53 & 2,0x \\
+4 & 16,31 & 3,5x \\
+8 & 12,26 & 4,7x \\
 \hline
 \end{tabular}
 \caption{Laufzeiten auf dem 672 MB Datensatz}
 \end{table}
 
-\textbf{Analyse}: Die Skalierung zeigt deutliche Vorteile der Parallelisierung. Durch die Optimierung auf Spark Core (ohne SQL-Overhead) konnte der Speedup von 3,2x auf 4,1x gesteigert werden. Die Laufzeit auf 8 Kernen sank von ca. 19s auf 13,5s. Der Speedup ist nicht perfekt linear, da:
+\textbf{Analyse}: Die Skalierung zeigt deutliche Vorteile der Parallelisierung. Durch die Optimierung auf Spark Core (ohne SQL-Overhead) konnte der Speedup von 3,2x auf 4,7x gesteigert werden. Die Laufzeit auf 8 Kernen sank auf ca. 12,3s. Der Speedup ist nicht perfekt linear, da:
 \begin{itemize}
     \item Shuffle-Operationen (z.B. \texttt{distinct()}, \texttt{reduceByKey}) Synchronisation erfordern
     \item Der Local Mode alle Kerne auf einem Rechner nutzt (shared memory limit)

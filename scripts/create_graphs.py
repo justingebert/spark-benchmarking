@@ -1,10 +1,20 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Benchmark data from our tests
-cores = [1, 2, 4, 8]
-times = [54.83, 28.84, 18.02, 13.52]
-speedups = [1.0, 54.83/28.84, 54.83/18.02, 54.83/13.52]
+import json
+import os
+
+JSON_FILE = "results/benchmark_data.json"
+
+if os.path.exists(JSON_FILE):
+    with open(JSON_FILE, 'r') as f:
+        data = json.load(f)
+        cores = data["cores"]
+        times = data["times"]
+        speedups = data["speedups"]
+    print(f"Loaded benchmark data from {JSON_FILE}")
+else:
+    raise Exception(f"Warning: {JSON_FILE} not found. Using fallback data.")
 
 # Set up style
 plt.style.use('seaborn-v0_8-whitegrid')
