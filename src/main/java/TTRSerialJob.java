@@ -29,7 +29,7 @@ public class TTRSerialJob {
 
         long startTime = System.currentTimeMillis();
 
-        // Load stopwords using shared util
+        // Load stopwords 
         Map<String, Set<String>> stopwordsMap = TTRUtils.loadAllStopwords(stopwordsDir);
 
         // Stats storage: Language -> (Total, Unique Set)
@@ -56,7 +56,7 @@ public class TTRSerialJob {
             Map<String, Set<String>> uniqueTokens,
             Map<String, Long> totalTokens) {
 
-        // Use shared language extraction
+        //language extraction
         String language = TTRUtils.extractLanguage(path.toString());
         if (language == null)
             return;
@@ -70,14 +70,13 @@ public class TTRSerialJob {
 
         try {
             String content = Files.readString(path);
-            // Use shared pattern
             Matcher matcher = TTRUtils.WORD_PATTERN.matcher(content);
 
             long count = 0;
             Set<String> unique = uniqueTokens.get(language);
 
             while (matcher.find()) {
-                // Use shared normalization
+                // normalization
                 String word = TTRUtils.normalizeWord(matcher.group());
 
                 if (!stopWords.contains(word)) {

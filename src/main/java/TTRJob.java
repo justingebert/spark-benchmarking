@@ -47,7 +47,6 @@ public final class TTRJob implements Serializable {
         long startTime = System.currentTimeMillis();
 
         // Load all stopwords into a map: language -> Set<stopword>
-        // Using shared utility
         Map<String, Set<String>> stopwordsMap = TTRUtils.loadAllStopwords(stopwordsDir);
 
         // Broadcast stopwords to all workers for efficient access
@@ -63,7 +62,7 @@ public final class TTRJob implements Serializable {
             String path = fileTuple._1();
             String content = fileTuple._2();
 
-            // Use shared extractLanguage logic
+            //extractLanguage
             String language = TTRUtils.extractLanguage(path);
             if (language == null) {
                 return Collections.emptyIterator();
@@ -72,13 +71,12 @@ public final class TTRJob implements Serializable {
             // Get stopwords for this language
             Set<String> stopwords = broadcastStopwords.value().getOrDefault(language, Collections.emptySet());
 
-            // Tokenize content
             List<Tuple2<String, String>> pairs = new ArrayList<>();
-            // Use shared Pattern
+
             Matcher matcher = TTRUtils.WORD_PATTERN.matcher(content);
 
             while (matcher.find()) {
-                // Use shared normalization
+                // normalization
                 String word = TTRUtils.normalizeWord(matcher.group());
 
                 if (!stopwords.contains(word)) {
