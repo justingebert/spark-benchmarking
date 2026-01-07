@@ -33,3 +33,10 @@ replay_pid*
 latex/*
 !latex/images
 !latex/doku.tex
+
+/data/text_large/*
+/data/text_huge/*
+
+.DS_Store
+
+.vscode

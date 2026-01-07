@@ -7,10 +7,8 @@ import org.apache.spark.broadcast.Broadcast;
 import java.io.Serializable;
 import java.nio.file.Files;
 import java.nio.file.Paths;
-import java.text.Normalizer;
 import java.util.*;
 import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Spark job to calculate Type-Token-Ratio (TTR) per language.
@@ -21,22 +19,6 @@ import java.util.regex.Pattern;
  * @authors Justin Gebert, Ole Lordieck
  */
 public final class TTRJob implements Serializable {
-
-    // Unicode pattern to match word characters (supports Cyrillic, Latin, etc.)
-    private static final Pattern WORD_PATTERN = Pattern.compile("\\p{L}+");
-
-    // Map language directory names to stopword file codes
-    private static final Map<String, String> LANG_TO_STOPWORD_CODE = new HashMap<>();
-    static {
-        LANG_TO_STOPWORD_CODE.put("german", "de");
-        LANG_TO_STOPWORD_CODE.put("english", "en");
-        LANG_TO_STOPWORD_CODE.put("french", "fr");
-        LANG_TO_STOPWORD_CODE.put("spanish", "es");
-        LANG_TO_STOPWORD_CODE.put("italian", "it");
-        LANG_TO_STOPWORD_CODE.put("dutch", "nl");
-        LANG_TO_STOPWORD_CODE.put("russian", "ru");
-        LANG_TO_STOPWORD_CODE.put("ukrainian", "ua");
-    }
 
     public static void main(String[] args) throws Exception {
         if (args.length < 2) {
@@ -65,12 +47,13 @@ public final class TTRJob implements Serializable {
         long startTime = System.currentTimeMillis();
 
         // Load all stopwords into a map: language -> Set<stopword>
-        Map<String, Set<String>> stopwordsMap = loadAllStopwords(stopwordsDir);
+        // Using shared utility
+        Map<String, Set<String>> stopwordsMap = TTRUtils.loadAllStopwords(stopwordsDir);
 
         // Broadcast stopwords to all workers for efficient access
         Broadcast<Map<String, Set<String>>> broadcastStopwords = sc.broadcast(stopwordsMap);
 
-        // Read all text files with their paths: (path, content)
+        // Read all text files with their paths: (path, content)  - 8 partitions because 8 is max cores - keeps it fair
         JavaPairRDD<String, String> filesRDD = sc.wholeTextFiles(textDir + "/*/*.txt", 8);
 
         System.out.println("Files loaded: " + filesRDD.count());
@@ -80,7 +63,8 @@ public final class TTRJob implements Serializable {
             String path = fileTuple._1();
             String content = fileTuple._2();
 
-            String language = extractLanguage(path);
+            // Use shared extractLanguage logic
+            String language = TTRUtils.extractLanguage(path);
             if (language == null) {
                 return Collections.emptyIterator();
             }
@@ -90,10 +74,12 @@ public final class TTRJob implements Serializable {
 
             // Tokenize content
             List<Tuple2<String, String>> pairs = new ArrayList<>();
-            Matcher matcher = WORD_PATTERN.matcher(content);
+            // Use shared Pattern
+            Matcher matcher = TTRUtils.WORD_PATTERN.matcher(content);
 
             while (matcher.find()) {
-                String word = normalizeWord(matcher.group());
+                // Use shared normalization
+                String word = TTRUtils.normalizeWord(matcher.group());
 
                 if (!stopwords.contains(word)) {
                     pairs.add(new Tuple2<>(language, word));
@@ -178,95 +164,5 @@ public final class TTRJob implements Serializable {
         // Clean up
         langWordPairs.unpersist();
         sc.stop();
-    }
-
-    /**
-     * Extract language name from file path.
-     * Expected format: .../data/text/<language>/filename.txt
-     */
-    private static String extractLanguage(String path) {
-        // Remove file:// prefix if present
-        path = path.replaceFirst("^file:", "");
-
-        String[] parts = path.split("/");
-        // Find "text" in path and get the next element
-        for (int i = 0; i < parts.length - 1; i++) {
-            if ("text".equals(parts[i]) && i + 1 < parts.length) {
-                String lang = parts[i + 1];
-                if (LANG_TO_STOPWORD_CODE.containsKey(lang)) {
-                    return lang;
-                }
-            }
-        }
-
-        // Fallback: try second-to-last element (parent directory of .txt file)
-        if (parts.length >= 2) {
-            String lang = parts[parts.length - 2];
-            if (LANG_TO_STOPWORD_CODE.containsKey(lang)) {
-                return lang;
-            }
-        }
-
-        return null;
-    }
-
-    /**
-     * Normalize a word: lowercase and Unicode normalization.
-     */
-    private static String normalizeWord(String word) {
-        // Normalize Unicode (handle different representations of same character)
-        String normalized = Normalizer.normalize(word, Normalizer.Form.NFC);
-        return normalized.toLowerCase();
-    }
-
-    /**
-     * Load all stopword files from the stopwords directory.
-     * Returns a map: language name -> Set of stopwords
-     */
-    private static Map<String, Set<String>> loadAllStopwords(String stopwordsDir) throws Exception {
-        Map<String, Set<String>> result = new HashMap<>();
-
-        for (Map.Entry<String, String> entry : LANG_TO_STOPWORD_CODE.entrySet()) {
-            String langName = entry.getKey();
-            String langCode = entry.getValue();
-            String filePath = stopwordsDir + "/" + langCode + ".json";
-
-            try {
-                String content = Files.readString(Paths.get(filePath));
-                Set<String> stopwords = parseJsonArray(content);
-                result.put(langName, stopwords);
-                System.out.println("Loaded " + stopwords.size() + " stopwords for " + langName);
-            } catch (Exception e) {
-                System.err.println("Warning: Could not load stopwords for " + langName + ": " + e.getMessage());
-                result.put(langName, Collections.emptySet());
-            }
-        }
-
-        return result;
-    }
-
-    /**
-     * Simple JSON array parser for stopwords.
-     * not as robust as jackson or else but reduces dependencies and bloat
-     * Expects format: ["word1", "word2", ...]
-     */
-    private static Set<String> parseJsonArray(String json) {
-        Set<String> words = new HashSet<>();
-
-        // Remove brackets and split by comma
-        json = json.trim();
-        if (json.startsWith("["))
-            json = json.substring(1);
-        if (json.endsWith("]"))
-            json = json.substring(0, json.length() - 1);
-
-        // Parse each quoted string
-        Pattern pattern = Pattern.compile("\"([^\"]+)\"");
-        Matcher matcher = pattern.matcher(json);
-        while (matcher.find()) {
-            words.add(matcher.group(1).toLowerCase());
-        }
-
-        return words;
     }
 }
