@@ -33,6 +33,7 @@ replay_pid*
 latex/*
 !latex/images
 !latex/doku.tex
+!latex/doku.pdf
 
 /data/text_large/*
 /data/text_huge/*
