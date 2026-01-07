@@ -1,77 +1,92 @@
 import matplotlib.pyplot as plt
-import numpy as np
-
 import json
 import os
+import numpy as np
 
-JSON_FILE = "results/benchmark_data.json"
+JSON_FILE = "results/benchmark_data_multi.json"
 
-if os.path.exists(JSON_FILE):
+def main():
+    if not os.path.exists(JSON_FILE):
+        print(f"Error: {JSON_FILE} not found. Run benchmarks first.")
+        # Create dummy data for testing if needed, or just exit
+        return
+
     with open(JSON_FILE, 'r') as f:
         data = json.load(f)
-        cores = data["cores"]
-        times = data["times"]
-        speedups = data["speedups"]
-    print(f"Loaded benchmark data from {JSON_FILE}")
-else:
-    raise Exception(f"Warning: {JSON_FILE} not found. Using fallback data.")
 
-# Set up style
-plt.style.use('seaborn-v0_8-whitegrid')
-fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 5))
+    # Style
+    plt.style.use('seaborn-v0_8-whitegrid')
+    
+    datasets = ["134MB", "672MB", "2.6GB"]
+    
+    # ==========================================
+    # 1. Comparison Charts (Time)
+    # ==========================================
+    fig, axes = plt.subplots(1, 3, figsize=(18, 6))
+    
+    for idx, name in enumerate(datasets):
+        ax = axes[idx]
+        if name not in data:
+            ax.text(0.5, 0.5, "No Data", ha='center')
+            continue
+            
+        d = data[name]
+        
+        # Prepare data for plotting
+        x_labels = ["Serial"] + [f"Spark {c}C" for c in d["cores"]]
+        times = [d["serial_time"] if d["serial_time"] else 0] + d["spark_times"]
+        colors = ['#C44E52'] + ['#4C72B0'] * len(d["cores"]) # Red for Serial, Blue for Spark
+        
+        # Plot
+        bars = ax.bar(x_labels, times, color=colors, edgecolor='black')
+        
+        ax.set_title(f"Dataset: {name}", fontsize=14, fontweight='bold')
+        ax.set_ylabel("Execution Time (s)")
+        ax.set_xticklabels(x_labels, rotation=45, ha='right')
+        
+        # Labels
+        for bar in bars:
+            height = bar.get_height()
+            if height > 0:
+                ax.text(bar.get_x() + bar.get_width()/2., height,
+                        f'{height:.1f}s',
+                        ha='center', va='bottom', fontsize=10, fontweight='bold')
 
-# ===== Graph 1: Execution Time =====
-ax1.bar(cores, times, color='#4C72B0', edgecolor='black', linewidth=1.2)
-ax1.set_xlabel('Anzahl Kerne', fontsize=12)
-ax1.set_ylabel('Laufzeit (Sekunden)', fontsize=12)
-ax1.set_title('Laufzeit vs. Anzahl Kerne\n(672 MB Datensatz)', fontsize=14, fontweight='bold')
-ax1.set_xticks(cores)
+    plt.suptitle("Total Execution Time: Serial vs Spark", fontsize=16, fontweight='bold')
+    plt.tight_layout()
+    plt.savefig("latex/images/benchmark_comparison.png")
+    print("Saved comparison chart.")
 
-# Add value labels on bars
-for i, (c, t) in enumerate(zip(cores, times)):
-    ax1.text(c, t + 1, f'{t:.1f}s', ha='center', va='bottom', fontsize=11, fontweight='bold')
+    # ==========================================
+    # 2. Speedup Chart (Scalability)
+    # ==========================================
+    plt.figure(figsize=(10, 6))
+    
+    markers = ['o', 's', '^']
+    colors = ['#55A868', '#CCB974', '#4C72B0'] # Green, Yellow, Blue
+    
+    for i, name in enumerate(datasets):
+        if name not in data: continue
+        d = data[name]
+        if not d["speedups_vs_spark1"]: continue
+        
+        plt.plot(d["cores"], d["speedups_vs_spark1"], 
+                 marker=markers[i], color=colors[i], linewidth=2.5, markersize=8,
+                 label=f"{name}")
 
-# ===== Graph 2: Speedup =====
-ax2.plot(cores, speedups, 'o-', color='#55A868', linewidth=2.5, markersize=10, label='Gemessener Speedup')
-ax2.plot(cores, cores, '--', color='#C44E52', linewidth=2, alpha=0.7, label='Idealer Speedup (linear)')
-ax2.set_xlabel('Anzahl Kerne', fontsize=12)
-ax2.set_ylabel('Speedup (x-fach)', fontsize=12)
-ax2.set_title('Skalierungsverhalten\n(Speedup vs. Kerne)', fontsize=14, fontweight='bold')
-ax2.set_xticks(cores)
-ax2.set_yticks(range(1, 9))
-ax2.legend(loc='upper left', fontsize=10)
-ax2.set_xlim(0.5, 8.5)
-ax2.set_ylim(0.5, 8.5)
+    # Ideal Linear Line
+    max_cores = 8
+    plt.plot([1, max_cores], [1, max_cores], '--', color='gray', alpha=0.5, label='Ideal Linear')
+    
+    plt.title("Spark Scalability (Speedup relative to Spark 1-Core)", fontsize=14, fontweight='bold')
+    plt.xlabel("Number of Spark Cores")
+    plt.ylabel("Speedup (x-times)")
+    plt.legend()
+    plt.xticks([1, 2, 4, 8])
+    plt.grid(True, which='both', linestyle='--', linewidth=0.5)
+    
+    plt.savefig("latex/images/speedup_comparison.png")
+    print("Saved speedup chart.")
 
-# Add speedup labels
-for c, s in zip(cores, speedups):
-    ax2.annotate(f'{s:.1f}x', (c, s), textcoords="offset points", xytext=(0, 10), 
-                 ha='center', fontsize=10, fontweight='bold')
-
-plt.tight_layout()
-plt.savefig('latex/images/benchmark.png', dpi=150, bbox_inches='tight')
-plt.savefig('latex/images/benchmark.pdf', bbox_inches='tight')
-print("Saved: latex/images/benchmark.png and benchmark.pdf")
-
-# ===== Graph 3: TTR Comparison by Language =====
-fig2, ax3 = plt.subplots(figsize=(10, 6))
-
-languages = ['russian', 'dutch', 'ukrainian', 'spanish', 'german', 'italian', 'english', 'french']
-ttr_values = [0.2940, 0.2012, 0.2004, 0.1070, 0.0723, 0.0679, 0.0349, 0.0338]
-
-colors = plt.cm.RdYlGn(np.linspace(0.8, 0.2, len(languages)))
-bars = ax3.barh(languages, ttr_values, color=colors, edgecolor='black', linewidth=1.2)
-
-ax3.set_xlabel('Type-Token-Ratio (TTR)', fontsize=12)
-ax3.set_title('Sprachliche Vielfalt pro Sprache\n(höher = mehr Vielfalt)', fontsize=14, fontweight='bold')
-ax3.set_xlim(0, 0.35)
-
-# Add value labels
-for bar, val in zip(bars, ttr_values):
-    ax3.text(val + 0.005, bar.get_y() + bar.get_height()/2, f'{val:.3f}', 
-             va='center', fontsize=11, fontweight='bold')
-
-plt.tight_layout()
-plt.savefig('latex/images/ttr_comparison.png', dpi=150, bbox_inches='tight')
-plt.savefig('latex/images/ttr_comparison.pdf', bbox_inches='tight')
-print("Saved: latex/images/ttr_comparison.png and ttr_comparison.pdf")
+if __name__ == "__main__":
+    main()
