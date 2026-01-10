@@ -63,8 +63,6 @@ public class TTRSerialJob {
 
         Set<String> stopWords = stopwordsMap.getOrDefault(language, Collections.emptySet());
 
-        // Initialize maps if needed
-        // Note: Not thread-safe, but this is a serial job
         uniqueTokens.putIfAbsent(language, new HashSet<>());
         totalTokens.putIfAbsent(language, 0L);
 
