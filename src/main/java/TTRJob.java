@@ -16,7 +16,7 @@ import java.util.regex.Matcher;
  * 
  * Usage: TTRJob <text-directory> <stopwords-directory> [output-directory]
  * 
- * @authors Justin Gebert, Ole Lordieck
+ * @authors Justin Gebert
  */
 public final class TTRJob implements Serializable {
 
